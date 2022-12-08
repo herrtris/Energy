@@ -127,15 +127,81 @@ dates_graph<-  rbind(dates_graph, dates_graph,dates_graph)
 strom_graph <- rbind(stacked, stacked2, stacked3)
 strom_graph <- cbind(dates_graph, strom_graph)
 
-
-#Assuring right order in the graph
-strom_graph$dates <- factor(strom_graph$dates, levels = strom_graph$dates)
-
-
 # Stacked
 ggplot(strom_graph, aes(fill=name, y=value, x=dates)) + 
   geom_bar(position="stack", stat="identity")+geom_hline(yintercept = 125)+geom_hline(yintercept = 143)
 
+rm(stacked, stacked2, stacked3)
+
+strom_cost %>% select(Total_cost, dates)
+strom_cost %>% select(Total_cost, dates) %>% summarise(mean(Total_cost))
+
+# Durchschnittsverbrauch liegt bei 135 € per month 
+
+######################################################################################
+################### GAS VERBRAUCH ###############################
+################################################################
+
+# Gasverbrauch
+Only_gas <-Energy_data_raw %>% filter(Gas_oder_Strom=="Gas")
+Only_gas <- Only_gas %>% arrange(Datum)
+
+Only_gas_V <- Only_gas[-c(5,7),]
+
+#estimate missing data 14.07.2022 and 20.06.2022
+mis <- Only_gas_V[c(5,6),]
+per_month <-((8529-8491)/3)
+
+mis <- c("2022-06-15", per_month+8491 ,"Gas","Tristan,Choye,Jiyoung")
+mis2 <- c("2022-07-15", per_month*2+8491,"Gas","Tristan,Choye,Jiyoung")
+
+Only_gas_V<-rbind(Only_gas_V,mis, mis2) %>% arrange(Datum)
+Only_gas_V <- Only_gas_V %>% mutate(Zaehlerstand=as.numeric(Zaehlerstand))
+
+# Grafik zum Verbrauch von Strom
+Only_gas_V<-Only_gas_V[-10,]
+
+Only_gas_V <- Only_gas_V %>% mutate(m3_monthly =Zaehlerstand-lag(Zaehlerstand), 
+                             time_diff=Datum-lag(Datum))
+
+dates_gas <- c("NA", "02.Jan-12.Feb", "12.Feb-15.Mar","15.Mar.-13.Apr", 
+           "13.Apr.-14.Mai", "14.Mai-14.Jun.","14.Jun-14.Jul","14.Jul-14.Aug",
+           "14.Aug-14.Sept","14.Sept-14.Okt","14.Okt-14.Nov")
+
+Only_gas_V <- cbind(Only_gas_V, dates_gas)
+
+#Assuring right order in the graph
+Only_gas_V$dates <- factor(Only_gas_V$dates, levels = Only_gas_V$dates)
+
+#Verbrauchsgraph_Strom
+graph_gV <- Only_gas_V[-1,] 
+ggplot(graph_gV%>%select(dates,m3_monthly), aes(dates,m3_monthly))+
+  geom_col()
+
+#######################################################################
+######### Gas cost calculation #######################################
+######################################################################
+
+# #To Do's 1. different costs from abrechnung eprimo -da gabs abweichungen
+#          2. erster October Rückung der VAT von 19 of 7%
+#          3. ab erster october gasspeicherumlage und andere umlage
+#          4. Im Dezember werden die Gas_kosten übernommen, bzw der abschlag
+#          5. 50€ savings from choye additional
+
+
+# Same pricing until 1. okt
+
+before_october<-Only_gas_V[c(2:9),]
+
+before_october<- before_october %>% mutate(kwh=m3_monthly*Brennwert*Zustandszahl) %>% 
+                   mutate(Kwh_cost=kwh*Arbeitspreis_Gas, Grund_cost=Grundpreis_Gas_brutto/(365/12)*as.numeric(time_diff)) %>%
+                   mutate(CO2_tax_cost= CO2_tax*kwh) %>% mutate(kwh_cost_co2=Kwh_cost+CO2_tax_cost)
+
+before_october <- before_october %>% mutate(VAT=0.19*(kwh_cost_co2+Grund_cost)) %>% mutate(total_cost=VAT+kwh_cost_co2+Grund_cost)
+before_october %>% select(dates_gas, total_cost)
+before_october %>% select(dates_gas, total_cost) %>% summarise(mean(total_cost))
+
+# until september we have a mean cost of 108.38 €/month
 
 
 
