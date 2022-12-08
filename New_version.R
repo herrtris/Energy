@@ -279,12 +279,46 @@ str(after_october)
 gas_cost <- rbind(gas_cost, after_october)
 gas_cost
 
-gas_cost$dates_gas <- factor(gas_cost$dates_gas, levels = gas_cost$dates_gas)
 
-ggplot(gas_cost, aes(x=dates_gas, y=total_cost))+geom_col()
-ggplot(gas_cost, aes(x=dates_gas, y=VAT))+geom_col()
-ggplot(gas_cost, aes(x=dates_gas, y=Kwh_cost))+geom_col()
-ggplot(gas_cost, aes(x=dates_gas, y=Gas_spe_umlage))+geom_col()
+#####################################################################################
+#############################################################################
+
+# create stacked barplot for gas_cost
+str(gas_cost)
+gas_graph <- gas_cost %>% select(dates_gas, kwh_cost_co2, Grund_cost, VAT, Gas_spe_umlage)
+
+stacked<-gas_graph %>% select(kwh_cost_co2)%>% pivot_longer(kwh_cost_co2)
+stacked2<-gas_graph %>% select(Grund_cost)%>% pivot_longer(Grund_cost)
+stacked3<-gas_graph %>% select(VAT)%>% pivot_longer(VAT)
+stacked4 <- gas_graph %>% select(Gas_spe_umlage)%>% pivot_longer(Gas_spe_umlage)
+
+dates_graph <- gas_graph %>% select(dates_gas)
+
+one <- dates_graph
+two <- dates_graph
+three <- dates_graph
+four <- dates_graph
+
+dates_graph<-  rbind(one, two, three, four) 
+rm(one, two,three, four)
+
+gas_graph <- rbind(stacked, stacked2, stacked3, stacked4)
+rm(stacked, stacked2, stacked3, stacked4)
+gas <- cbind(dates_graph, gas_graph)
+
+#Assuring right order in the graph
+#gas$dates_gas <- factor(gas$dates_gas, levels = gas$dates_gas)
+
+dates_gas <- c("02.Jan-12.Feb", "12.Feb-15.Mar","15.Mar.-13.Apr", 
+              "13.Apr.-14.Mai", "14.Mai-14.Jun.","14.Jun-14.Jul","14.Jul-14.Aug",
+              "14.Aug-14.Sept","14.Sept-14.Okt","14.Okt-14.Nov")
+
+p <- ggplot(theTable, aes(x = Position)) + scale_x_discrete(limits = positions)
+
+# Stacked
+ggplot(gas, aes(fill=name, y=value, x=dates_gas)) + 
+  geom_bar(position="stack", stat="identity")+geom_hline(yintercept = 125)
+
 
 
 
