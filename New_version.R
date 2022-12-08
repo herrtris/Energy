@@ -203,6 +203,89 @@ before_october %>% select(dates_gas, total_cost) %>% summarise(mean(total_cost))
 
 # until september we have a mean cost of 108.38 €/month
 
+## Mischkalkulation für oktober
+october<-Only_gas[c(9:11),]
+october
+
+october <- october %>% mutate(m3_monthly=Zaehlerstand-lag(Zaehlerstand), 
+                        time_diff=Datum-lag(Datum))
+
+
+october <- october %>% mutate(kwh=m3_monthly*Zustandszahl*Brennwert)
+                              
+october_old_price <- october[2,]                          
+october_new_price <- october[3,]
+
+october_old_price<- october_old_price %>% mutate(kwh=m3_monthly*Brennwert*Zustandszahl) %>% 
+  mutate(Kwh_cost=kwh*Arbeitspreis_Gas, Grund_cost=Grundpreis_Gas_brutto/(365/12)*as.numeric(time_diff)) %>%
+  mutate(CO2_tax_cost= CO2_tax*kwh) %>% mutate(kwh_cost_co2=Kwh_cost+CO2_tax_cost)
+
+october_old_price <- october_old_price %>% mutate(VAT=0.19*(kwh_cost_co2+Grund_cost)) %>% mutate(total_cost=VAT+kwh_cost_co2+Grund_cost)
+
+
+october_new_price<- october_new_price %>% mutate(kwh=m3_monthly*Brennwert*Zustandszahl) %>% 
+  mutate(Kwh_cost=kwh*Arbeitspreis_Gas, Grund_cost=Grundpreis_Gas_brutto/(365/12)*as.numeric(time_diff)) %>%
+  mutate(Gas_spe_umlage=Gas_speicherumlage*kwh)%>%
+  mutate(CO2_tax_cost= CO2_tax*kwh) %>% mutate(kwh_cost_co2=Kwh_cost+CO2_tax_cost)
+
+october_new_price <- october_new_price %>% mutate(VAT=0.07*(kwh_cost_co2+Grund_cost+Gas_spe_umlage)) %>% mutate(total_cost=VAT+kwh_cost_co2+Grund_cost+Gas_spe_umlage)
+
+### october combined
+before_october <- before_october %>% select(m3_monthly, time_diff, dates_gas, kwh:total_cost)
+str(before_october)
+
+str(october_old_price)
+october_old_price <- october_old_price %>% select(m3_monthly:total_cost)
+str(october_new_price)
+october_new_price <- october_new_price %>% select(m3_monthly:total_cost)
+
+october_old_price<- october_old_price %>% mutate(Gas_spe_umlage=0)
+
+october_finished<-rbind(october_old_price, october_new_price)
+str(october_finished)
+
+
+october_finished<-october_finished %>%summarise(m3_monthly=sum(m3_monthly), time_diff=sum(time_diff), 
+                    kwh=sum(kwh), Grund_cost=sum(Grund_cost), CO2_tax_cost=sum(CO2_tax_cost),
+                    Kwh_cost=sum(Kwh_cost), kwh_cost_co2=sum(kwh_cost_co2), VAT=sum(VAT),
+                    total_cost=sum(total_cost), Gas_spe_umlage=sum(Gas_spe_umlage))
+
+
+str(before_october)
+str(october_finished)
+Only_gas_V
+
+october_finished<- mutate(october_finished,dates_gas="14.Sept-14.Okt")
+before_october<- mutate(before_october, Gas_spe_umlage=0)
+
+gas_cost<-rbind(before_october, october_finished)
+
+#########
+# Calculation for from ocotber onwards, coded in the way that it can continue
+Only_gas_V
+
+after_october <- Only_gas_V[-c(1:10),]
+after_october <- after_october %>% select(m3_monthly:dates_gas)
+
+after_october<- after_october %>% mutate(kwh=m3_monthly*Brennwert*Zustandszahl) %>% 
+  mutate(Kwh_cost=kwh*Arbeitspreis_Gas, Grund_cost=Grundpreis_Gas_brutto/(365/12)*as.numeric(time_diff)) %>%
+  mutate(CO2_tax_cost= CO2_tax*kwh) %>% mutate(kwh_cost_co2=Kwh_cost+CO2_tax_cost) %>% mutate(Gas_spe_umlage=kwh*Gas_speicherumlage)
+
+after_october <- after_october %>% mutate(VAT=0.07*(kwh_cost_co2+Grund_cost+Gas_spe_umlage)) %>% mutate(total_cost=VAT+kwh_cost_co2+Grund_cost+Gas_spe_umlage)
+
+str(gas_cost)
+str(after_october)
+
+gas_cost <- rbind(gas_cost, after_october)
+gas_cost
+
+gas_cost$dates_gas <- factor(gas_cost$dates_gas, levels = gas_cost$dates_gas)
+
+ggplot(gas_cost, aes(x=dates_gas, y=total_cost))+geom_col()
+ggplot(gas_cost, aes(x=dates_gas, y=VAT))+geom_col()
+ggplot(gas_cost, aes(x=dates_gas, y=Kwh_cost))+geom_col()
+ggplot(gas_cost, aes(x=dates_gas, y=Gas_spe_umlage))+geom_col()
+
 
 
 
