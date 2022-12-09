@@ -128,7 +128,7 @@ strom_graph <- rbind(stacked, stacked2, stacked3)
 strom_graph <- cbind(dates_graph, strom_graph)
 
 # Stacked
-ggplot(strom_graph, aes(fill=name, y=value, x=dates)) + 
+s1<-ggplot(strom_graph, aes(fill=name, y=value, x=dates)) + 
   geom_bar(position="stack", stat="identity")+geom_hline(yintercept = 125)+geom_hline(yintercept = 143)
 
 rm(stacked, stacked2, stacked3)
@@ -299,6 +299,12 @@ two <- dates_graph
 three <- dates_graph
 four <- dates_graph
 
+one$dates_gas <- factor(one$dates_gas, levels = one$dates_gas)
+two$dates_gas <- factor(two$dates_gas, levels = two$dates_gas)
+three$dates_gas <- factor(three$dates_gas, levels = three$dates_gas)
+four$dates_gas <- factor(four$dates_gas, levels = four$dates_gas)
+
+
 dates_graph<-  rbind(one, two, three, four) 
 rm(one, two,three, four)
 
@@ -306,21 +312,188 @@ gas_graph <- rbind(stacked, stacked2, stacked3, stacked4)
 rm(stacked, stacked2, stacked3, stacked4)
 gas <- cbind(dates_graph, gas_graph)
 
-#Assuring right order in the graph
-#gas$dates_gas <- factor(gas$dates_gas, levels = gas$dates_gas)
-
-dates_gas <- c("02.Jan-12.Feb", "12.Feb-15.Mar","15.Mar.-13.Apr", 
-              "13.Apr.-14.Mai", "14.Mai-14.Jun.","14.Jun-14.Jul","14.Jul-14.Aug",
-              "14.Aug-14.Sept","14.Sept-14.Okt","14.Okt-14.Nov")
-
-p <- ggplot(theTable, aes(x = Position)) + scale_x_discrete(limits = positions)
-
 # Stacked
-ggplot(gas, aes(fill=name, y=value, x=dates_gas)) + 
+g1 <-ggplot(gas, aes(fill=name, y=value, x=dates_gas)) + 
   geom_bar(position="stack", stat="identity")+geom_hline(yintercept = 125)
+g1
+
+###################################################################################################
+## Creating a balance per person ####################################################
+rm(october, october_finished, october_new_price, october_old_price)
+
+# first the cost side for electricity before choye
+strom_cost
+before_choye<-Only_strom[c(1,5),]
+
+before_choye <- before_choye %>%mutate(kwh_monthly=Zaehlerstand-lag(Zaehlerstand), 
+                                       time_diff=Datum-lag(Datum))
+
+before_choye <- before_choye %>% mutate(kwh_cost=kwh_monthly*Verbrauchspreis_bis1July/100,
+                                 Grund_cost=as.numeric(time_diff)*
+                                 Grundpreis_Strom_brutto/(365/12))
+
+before_choye <- before_choye %>% mutate(VAT=0.19*(kwh_cost+Grund_cost)) %>% mutate(total_cost=kwh_cost+Grund_cost+VAT) %>%
+                                 select(Gas_oder_Strom, kwh_monthly:total_cost)
+
+before_choye <- before_choye %>% mutate(before_choye, dates="01.Feb.22-01.May.22", People_living_flat="Tristan,Hien,JiYoung")
+
+before_choye<- before_choye[2,]
+before_choye
+
+# until price change in July
+july<-Only_strom[c(5,8),]
+july
+
+july <- july %>%mutate(kwh_monthly=Zaehlerstand-lag(Zaehlerstand), 
+                                       time_diff=Datum-lag(Datum))
+
+july <- july %>% mutate(kwh_cost=kwh_monthly*Verbrauchspreis_bis1July/100,
+                                        Grund_cost=as.numeric(time_diff)*
+                                          Grundpreis_Strom_brutto/(365/12))
+
+july <- july %>% mutate(VAT=0.19*(kwh_cost+Grund_cost)) %>% mutate(total_cost=kwh_cost+Grund_cost+VAT) %>%
+                select(Gas_oder_Strom:total_cost)
+
+july <- july %>% mutate(july, dates="01.May.22-01.July.22")
+
+july<- july[2,]
+july
 
 
+# until november
+november <- Only_strom[c(8,13),]
+november
 
+november <- november %>%mutate(kwh_monthly=Zaehlerstand-lag(Zaehlerstand), 
+                       time_diff=Datum-lag(Datum))
+
+november <- november %>% mutate(kwh_cost=kwh_monthly*Verbrauchspreis_bis1July/100,
+                        Grund_cost=as.numeric(time_diff)*
+                          Grundpreis_Strom_brutto/(365/12))
+
+november <- november %>% mutate(VAT=0.19*(kwh_cost+Grund_cost)) %>% mutate(total_cost=kwh_cost+Grund_cost+VAT) %>%
+  select(Gas_oder_Strom:total_cost)
+
+november <- november %>% mutate(november, dates="01.July.22-14.Nov.22")
+
+november<- november[2,]
+november
+
+total_snov_cost <- rbind(before_choye, july, november)
+total_snov_cost
+rm(before_choye, july, november)
+
+##########################################################################################################
+#########################################################################################################
+# for gas until november
+
+Only_gas
+
+before_choye <- Only_gas[c(1,5),]
+before_choye
+
+before_choye <- before_choye %>% mutate(m3_monthly =Zaehlerstand-lag(Zaehlerstand), 
+                                    time_diff=Datum-lag(Datum))
+
+before_choye<- before_choye %>% mutate(kwh=m3_monthly*Brennwert*Zustandszahl) %>% 
+  mutate(Kwh_cost=kwh*Arbeitspreis_Gas, Grund_cost=Grundpreis_Gas_brutto/(365/12)*as.numeric(time_diff)) %>%
+  mutate(CO2_tax_cost= CO2_tax*kwh) %>% mutate(kwh_cost_co2=Kwh_cost+CO2_tax_cost)
+
+before_choye <- before_choye %>% mutate(VAT=0.19*(kwh_cost_co2+Grund_cost)) %>% mutate(total_cost=VAT+kwh_cost_co2+Grund_cost)%>%
+                                 select(Gas_oder_Strom, m3_monthly:total_cost)
+
+before_choye
+
+before_choye <- before_choye %>% mutate(before_choye, dates="02.Jan.22-01.May.22", People_living_flat="Tristan,Hien,JiYoung")
+
+before_choye<- before_choye[2,]
+before_choye
+
+####################
+# october
+october <- Only_gas[c(5,10),]
+
+
+october <- october %>% mutate(m3_monthly =Zaehlerstand-lag(Zaehlerstand), 
+                                        time_diff=Datum-lag(Datum))
+
+october<- october %>% mutate(kwh=m3_monthly*Brennwert*Zustandszahl) %>% 
+  mutate(Kwh_cost=kwh*Arbeitspreis_Gas, Grund_cost=Grundpreis_Gas_brutto/(365/12)*as.numeric(time_diff)) %>%
+  mutate(CO2_tax_cost= CO2_tax*kwh) %>% mutate(kwh_cost_co2=Kwh_cost+CO2_tax_cost)
+
+october <- october %>% mutate(VAT=0.19*(kwh_cost_co2+Grund_cost)) %>% mutate(total_cost=VAT+kwh_cost_co2+Grund_cost)%>%
+  select(Gas_oder_Strom:total_cost)
+
+october <- october %>% mutate(october, dates="01.May.22-01.Oct.22")
+
+october<- october[2,]
+october
+
+###########
+# from ocotber onwards, november so far can later be coded so that it runs automatically
+november <-Only_gas[c(10,12),]
+
+november <- november %>% mutate(m3_monthly =Zaehlerstand-lag(Zaehlerstand), 
+                              time_diff=Datum-lag(Datum))
+
+november<- november %>% mutate(kwh=m3_monthly*Brennwert*Zustandszahl) %>% 
+  mutate(Kwh_cost=kwh*Arbeitspreis_Gas, Grund_cost=Grundpreis_Gas_brutto/(365/12)*as.numeric(time_diff)) %>%
+  mutate(CO2_tax_cost= CO2_tax*kwh) %>% mutate(kwh_cost_co2=Kwh_cost+CO2_tax_cost) %>%mutate(Gas_spe_umlage=Gas_speicherumlage*kwh)
+
+november <- november %>% mutate(VAT=0.07*(kwh_cost_co2+Grund_cost+Gas_spe_umlage)) %>% mutate(total_cost=VAT+kwh_cost_co2+Grund_cost+ Gas_spe_umlage)%>%
+  select(Gas_oder_Strom:total_cost)
+
+november <- november %>% mutate(november, dates="01.Oct.22-14.Nov.22")
+
+november<- november[2,]
+november
+
+## bringing the gas cost tables together
+before_choye
+october
+november
+
+before_choye <- before_choye %>% mutate(before_choye, Gas_spe_umlage=0)
+october <- october %>% mutate(october, Gas_spe_umlage=0)
+
+total_gnov_cost <- rbind(before_choye, october, november)
+rm(before_choye, october, november)
+
+total_gnov_cost
+
+###########
+########### Integrating abschläge für strom und gas
+
+total_gnov_cost
+total_snov_cost
+
+#Gas abschlagszahlungen für die  jeweiligen zeiträume
+abschlag_gass <- c(4*125,3*125+2*116,116+0.5*116)
+abschlag_gass <- data.frame(abschlag_gass=abschlag_gass)
+
+
+total_gnov_cost <- cbind(total_gnov_cost,abschlag_gass)
+total_gnov_cost
+total_gnov_cost %>% group_by(dates) %>%summarise(balance=abschlag_gass-total_cost)
+total_gnov_cost %>% group_by(dates) %>%summarise(balance=abschlag_gass-total_cost) %>% summarise(sum_balance=sum(balance))
+
+# Strom
+abschlag_stromm <- c(3*108, 2*108, 2*108+2*143+0.5*143)
+abschlag_stromm <- data.frame(abschlag_stromm=abschlag_stromm)
+total_snov_cost <- cbind(total_snov_cost, abschlag_stromm)
+total_snov_cost %>% group_by(dates) %>% summarise(balance=abschlag_stromm-total_cost)
+total_snov_cost %>% group_by(dates) %>% summarise(balance=abschlag_stromm-total_cost) %>% summarise(sum_balance=sum(balance))+333.26
+
+
+### Now calculating what we have on our account during these periods
+### calclating our saving, on 06.07.2022 we have 800??? on our account
+### We have paid gas from January onwards under currrent contract
+### We have paid Electricity from Feb onwards under contract
+
+savings_per_month_wg <-Rent_C+Rent_J+Rent_T-miete-Internet-Abschlag_Gas-Abschlag_Strom
+savings_per_month_wg
+July1_money <- 800-Internet- Abschlag_Gas- Abschlag_Strom
+Starting_savings <- July1_money -5*savings_per_month_wg
 
 
 
