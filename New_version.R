@@ -593,9 +593,9 @@ s_nov14 <- s_nov14 %>% mutate(abschlag=abschlag_stromm) %>% select(-abschlag_str
 gs_nov14<-rbind(g_nov14, s_nov14)
 gs_nov14
 
-savings_Tristan_nov14 <- c(100.62, 0,0,0)
-savings_Choye_no14 <- c(100.62, 0, 0, 0)
-savings_Jiyoung_nov_14 <- c(100.62,0,0,0)
+savings_Tristan_nov14 <- c(140.3, 0,0,0)
+savings_Choye_no14 <- c(140.3, 0, 0, 0)
+savings_Jiyoung_nov_14 <- c(140.3,0,0,0)
 
 
 gs_nov14 <- cbind(gs_nov14, savings_Tristan_nov14, savings_Choye_no14, savings_Jiyoung_nov_14)
@@ -623,6 +623,8 @@ nov_per_person <- nov %>% mutate(Jiyoung=per_person, Tristan=per_person, Choye=p
 nov_per_person
 
 ########
+gs_nov14
+
 may_per_person
 nov_per_person
 
@@ -702,6 +704,7 @@ dez_gas
 
 may_per_person
 nov_per_person
+gs_nov14
 
 s1
 
