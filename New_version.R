@@ -46,8 +46,9 @@ Only_strom_V$dates <- factor(Only_strom_V$dates, levels = Only_strom_V$dates)
 
   #Verbrauchsgraph_Strom
   graph_V <- Only_strom_V[-1,] 
-  ggplot(graph_V%>%select(dates,kwh_monthly), aes(dates,kwh_monthly))+
+sv<-  ggplot(graph_V%>%select(dates,kwh_monthly), aes(dates,kwh_monthly))+
   geom_col()
+sv
 ##############################################################################################
 ## Cost Calculation ################################################
   
@@ -130,16 +131,23 @@ strom_graph <- rbind(stacked, stacked2, stacked3, stacked4)
 strom_graph <- cbind(dates_graph, strom_graph)
 
 # Stacked
+# s1<-ggplot(strom_graph, aes(fill=name, y=value, x=dates)) + 
+#   geom_bar(position="stack", stat="identity")+geom_hline(yintercept = 108)+geom_hline(yintercept = 143)
+# s1
+
 s1<-ggplot(strom_graph, aes(fill=name, y=value, x=dates)) + 
-  geom_bar(position="stack", stat="identity")+geom_hline(yintercept = 108)+geom_hline(yintercept = 143)
-s1
+  geom_bar(position="stack", stat="identity")+ geom_segment(aes(x=0, xend=8, y=108, yend=108))+
+  geom_segment(aes(x=8, xend=11.5, y=143, yend=143))
+  
+s1  
+  
 
 rm(stacked, stacked2, stacked3, stacked4)
 
 strom_cost %>% select(Total_cost, dates)
 strom_cost %>% select(Total_cost, dates) %>% summarise(mean(Total_cost))
 
-# Durchschnittsverbrauch liegt bei 135 € per month 
+# Durchschnittsverbrauch liegt bei 122.25 € per month 
 
 # check calculations until August, in August we had to pay 333,xx for electricity
 august<-strom_cost[c(1:7),]
@@ -205,10 +213,11 @@ Only_gas_V <- cbind(Only_gas_V, dates_gas)
 #Assuring right order in the graph
 Only_gas_V$dates <- factor(Only_gas_V$dates, levels = Only_gas_V$dates)
 
-#Verbrauchsgraph_Strom
+#Verbrauchsgraph_gas
 graph_gV <- Only_gas_V[-1,] 
-ggplot(graph_gV%>%select(dates,m3_monthly), aes(dates,m3_monthly))+
+gv<- ggplot(graph_gV%>%select(dates,m3_monthly), aes(dates,m3_monthly))+
   geom_col()
+gv
 
 #######################################################################
 ######### Gas cost calculation #######################################
@@ -359,8 +368,10 @@ gas <- cbind(dates_graph, gas_graph)
 
 # Stacked
 g1 <-ggplot(gas, aes(fill=name, y=value, x=dates_gas)) + 
-  geom_bar(position="stack", stat="identity")+geom_hline(yintercept = 125)+geom_hline(yintercept = 116)
+  geom_bar(position="stack", stat="identity") + geom_segment(x=0, xend=7, y=125, yend=125) + geom_segment(x=7, xend=11.5, y=116, yend=116)+
+  geom_segment(x=7, xend=7, y=116, yend=125)
 g1
+
 
 ###################################################################################################
 ## Creating a balance per person ####################################################
@@ -593,9 +604,9 @@ s_nov14 <- s_nov14 %>% mutate(abschlag=abschlag_stromm) %>% select(-abschlag_str
 gs_nov14<-rbind(g_nov14, s_nov14)
 gs_nov14
 
-savings_Tristan_nov14 <- c(140.3, 0,0,0)
-savings_Choye_no14 <- c(140.3, 0, 0, 0)
-savings_Jiyoung_nov_14 <- c(140.3,0,0,0)
+savings_Tristan_nov14 <- c(151.3, 0,0,0)
+savings_Choye_no14 <- c(151.3, 0, 0, 0)
+savings_Jiyoung_nov_14 <- c(151.3,0,0,0)
 
 
 gs_nov14 <- cbind(gs_nov14, savings_Tristan_nov14, savings_Choye_no14, savings_Jiyoung_nov_14)
@@ -623,7 +634,13 @@ nov_per_person <- nov %>% mutate(Jiyoung=per_person, Tristan=per_person, Choye=p
 nov_per_person
 
 ########
+balance_may_gas 
+balance_may_strom 
+
+# ab may für Strom und gas
 gs_nov14
+
+
 
 may_per_person
 nov_per_person
@@ -697,6 +714,7 @@ dez_strom <- dez_strom %>% mutate(kwh_cost=as.numeric(kwh_monthly)*Verbrauchspre
 
 dez_strom <- dez_strom %>% mutate(VAT=0.19*(kwh_cost+Grund_cost+strom_tax)) %>% mutate(total_cost=kwh_cost+Grund_cost+VAT+strom_tax) 
 dez_strom  
+
 dez_gas
 ## For DEzember: 
   # Gas cost: 94€
@@ -706,5 +724,60 @@ may_per_person
 nov_per_person
 gs_nov14
 
-s1
+#### only problem can be liquidity... do I have enough on acount to run it... 
+
+
+
+s1<-s1+theme(axis.text.x = element_text(angle = 45, vjust = 0.6, hjust=0.5))+theme(axis.title.x = element_blank())+ ylab("Costs in Eurofor Electricity")
+g1<-g1+theme(axis.text.x = element_text(angle = 45, vjust = 0.6, hjust=0.5))+theme(axis.title.x = element_blank())+ ylab("Costs in Euro for Gas")
+sv<-sv+theme(axis.text.x = element_text(angle = 45, vjust = 0.6, hjust=0.5))+theme(axis.title.x = element_blank())+ ylab("consumption in kwh for Electricity")
+gv<-gv+theme(axis.text.x = element_text(angle = 45, vjust = 0.6, hjust=0.5))+theme(axis.title.x = element_blank())+ ylab("consumption in m3 for Gas")
+
+
+gv_kwh<-ggplot(graph_gV%>%mutate(kwh_monthly=m3_monthly*Brennwert*Zustandszahl)%>%select(dates,kwh_monthly), aes(dates,kwh_monthly))+
+  geom_col()+theme(axis.text.x = element_text(angle = 45, vjust = 0.6, hjust=0.5))+theme(axis.title.x = element_blank())+ylab("consumption in kwh for Gas")
+gv_kwh
+
+
+require(gridExtra)
+plot1 <- sv
+plot2 <- gv_kwh
+plot3<- s1
+plot4 <-g1
+
+plot3<-plot3 + geom_segment(x=8, xend=8, y=108, yend=143)+ theme(legend.title = element_blank())
+plot3
+plot4<- plot4+ theme(legend.title=element_blank())
+grid.arrange(plot1, plot2, plot3,plot4, ncol=2)
+
+(12*50.02+5.86*12000/100)/12000
+
+# built in themes
+
+# theme_gray() is the default.
+# theme_bw() is useful when you use transparency.
+# theme_classic() is more traditional.
+# theme_void() removes everything but the data.
+
+plot1 + theme_bw()
+plot1 + theme_gray()
+plot1 + theme_classic()
+plot1 + theme_void()
+
+#ggthemes
+#install.packages("ggthemes")
+library(ggthemes)
+
+plot1+ theme_fivethirtyeight()
+plot1+theme_tufte()
+plot1+ theme_wsj()
+
+plot3
+
+
+geom_segment(aes()) 
+# # Add a geom_segment() layer
+# ggplot(gm2007, aes(x = lifeExp, y = country, color = lifeExp)) +
+#   geom_point(size = 4) +
+#   geom_segment(aes(xend = 30, yend = country), size = 2)
 
