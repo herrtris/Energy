@@ -13,16 +13,26 @@ library(ggplot2)
 library(dplyr)
 library(tidyverse)
 library(lubridate)
+library(writexl)
 
 excel_sheets("Gas_Strom_berechnung_ver4.xlsx")
 Energy_data_raw <- read_excel("Gas_Strom_berechnung_ver4.xlsx", sheet="Sheet1")
 str(Energy_data_raw)
 head(Energy_data_raw)
 
+# einlesen der abschlaginformation, umso immer erneuert werden
+abschlag_gas <- read_excel("Gas_Strom_berechnung_ver4.xlsx", sheet="Abschlag_gas")
+abschlag_strom <- read_excel("Gas_Strom_berechnung_ver4.xlsx", sheet="Abschlag_strom")
+savings_account <- read_excel("Gas_Strom_berechnung_ver4.xlsx", sheet="savings_per_person")
+
+
+
 # Stromverbrauch
 Only_strom <-Energy_data_raw %>% filter(Gas_oder_Strom=="Strom")
 Only_strom <- Only_strom %>% arrange(Datum)
-Only_strom_V <- Only_strom[-c(5,8,11),]
+
+# automated kills the right rows so that it is correct
+Only_strom_V <- Only_strom[-c(5,8,11,15),]
 
 #estimate missing data 14.07.2022
 mis <- Only_strom_V[c(6,7),]
@@ -34,10 +44,6 @@ Only_strom_V <- Only_strom_V %>% mutate(Zaehlerstand=as.numeric(Zaehlerstand))
 
 # Grafik zum Verbrauch von Strom
 Only_strom_V <- Only_strom_V %>% mutate(kwh_monthly =Zaehlerstand-lag(Zaehlerstand), time_diff=Datum-lag(Datum))
-
-dates <- c("NA", "1.Feb-17.Feb", "17.Feb-15.Mar", "15.Mar.-13.Apr", 
-           "13.Apr.-14.Mai", "14.Mai-20.Jun.","20.Jun-14.Jul","14.Jul-14.Aug",
-           "14.Aug-14.Sept","14.Sept-14.Okt","14.Okt-14.Nov", "14.Nov-14.Dez")
 
 Only_strom_V <- cbind(Only_strom_V, dates)
 
@@ -111,6 +117,49 @@ after_august <- after_august %>% mutate(kwh_cost=kwh_monthly*Verbrauchspreis_abJ
 
 strom_cost <- rbind(before_august,after_august)
 strom_cost
+
+### Mischkalkulation Strom Dezember 22 bis 14.Jan 23. 
+### Price increase after new years from 25.52 to 39.75 in total
+
+# mischkalkulation dez/jan 
+Only_strom
+dez22 <- Only_strom[c(14,15),]
+
+dez22 <- dez22 %>% mutate(kwh_monthly=Zaehlerstand-lag(Zaehlerstand), 
+                        time_diff=Datum-lag(Datum))
+
+
+dez22 <- dez22 %>% mutate(kwh_cost=kwh_monthly*Verbrauchspreis_abJuly/100,
+                        Grund_cost=as.numeric(time_diff)*
+                          Grundpreis_Strom_brutto/(365/12))
+
+
+jan23 <- Only_strom[c(15,16),]
+jan23 <- jan23 %>% mutate(kwh_monthly=Zaehlerstand-lag(Zaehlerstand), 
+                          time_diff=Datum-lag(Datum))
+
+jan23 <- jan23 %>% mutate(kwh_cost=kwh_monthly*Verbrauchspreis_abJan23/100,
+                          Grund_cost=as.numeric(time_diff)*
+                            Grundpreis_Strom_brutto/(365/12))
+
+jan23 <- jan23[-1,]
+dez22<- dez22[-1,]
+
+jandez<- rbind(dez22,jan23)
+
+part1 <- jandez[2,]
+part1 <- part1 %>% select(Datum:People_living_flat)
+part2 <-jandez %>% summarise(kwh_monthly=sum(kwh_monthly), time_diff=sum(time_diff),
+                     kwh_cost=sum(kwh_cost), Grund_cost=sum(Grund_cost))
+
+jandez <- cbind(part1, part2)
+jandez <- cbind(jandez, dates="14.Dez-13.Jan")
+jandez
+
+rm(part1, part2, dez22, jan23)
+
+strom_cost<- rbind(strom_cost, jandez)
+
 
 # Calculate VAT and total cost
 strom_cost <- strom_cost %>% mutate(strom_tax=kwh_monthly*Stromsteuer)%>%
@@ -204,9 +253,9 @@ Only_gas_V<-Only_gas_V[-10,]
 Only_gas_V <- Only_gas_V %>% mutate(m3_monthly =Zaehlerstand-lag(Zaehlerstand), 
                              time_diff=Datum-lag(Datum))
 
-dates_gas <- c("NA", "02.Jan-12.Feb", "12.Feb-15.Mar","15.Mar.-13.Apr", 
-           "13.Apr.-14.Mai", "14.Mai-14.Jun.","14.Jun-14.Jul","14.Jul-14.Aug",
-           "14.Aug-14.Sept","14.Sept-14.Okt","14.Okt-14.Nov", "14.Nov-14.Dez")
+# dates_gas <- c("NA", "02.Jan-12.Feb", "12.Feb-15.Mar","15.Mar.-13.Apr", 
+#            "13.Apr.-14.Mai", "14.Mai-14.Jun.","14.Jun-14.Jul","14.Jul-14.Aug",
+#            "14.Aug-14.Sept","14.Sept-14.Okt","14.Okt-14.Nov", "14.Nov-14.Dez", "14.Dez-13.Jan")
 
 Only_gas_V <- cbind(Only_gas_V, dates_gas)
 
@@ -305,7 +354,10 @@ gas_cost<-rbind(before_october, october_finished)
 # Calculation for from ocotber onwards, coded in the way that it can continue
 Only_gas_V
 
+# this is the code making sure to automate for the next strom sequence I need to do something similiar
 after_october <- Only_gas_V[-c(1:10),]
+
+
 after_october <- after_october %>% select(m3_monthly:dates_gas)
 
 after_october<- after_october %>% mutate(kwh=m3_monthly*Brennwert*Zustandszahl) %>% 
@@ -368,13 +420,18 @@ gas <- cbind(dates_graph, gas_graph)
 
 # Stacked
 g1 <-ggplot(gas, aes(fill=name, y=value, x=dates_gas)) + 
-  geom_bar(position="stack", stat="identity") + geom_segment(x=0, xend=7, y=125, yend=125) + geom_segment(x=7, xend=11.5, y=116, yend=116)+
+  geom_bar(position="stack", stat="identity") + geom_segment(x=0, xend=7, y=125, yend=125) + geom_segment(x=7, xend=12.5, y=116, yend=116)+
   geom_segment(x=7, xend=7, y=116, yend=125)
 g1
 
 
-###################################################################################################
-## Creating a balance per person ####################################################
+#############################################################################################################################################
+## Creating a balance per person #############################################################################################################
+
+##################################################################################################################################################
+
+
+
 rm(october, october_finished, october_new_price, october_old_price)
 
 # first the cost side for electricity before choye
@@ -418,8 +475,21 @@ july<- july[2,]
 july
 
 
-# until dez
-november <- Only_strom[c(8,14),]
+# until Jan #####################################################################
+# now automated with slice tail - can be automated next time when it is normal again
+
+# november <- Only_strom[c(8,16),]
+# november <- Only_strom[c(8,16),]
+
+#### here I need to be careful becuase this is a mixed calculation because of a price change,
+### I can only automate this next time date 13.01.23
+
+novembers1 <- Only_strom %>% slice(16)
+novembers2<- Only_strom %>% slice(8)
+
+november<-rbind(novembers2,novembers1)
+
+
 november
 
 november <- november %>%mutate(kwh_monthly=Zaehlerstand-lag(Zaehlerstand), 
@@ -433,18 +503,20 @@ november <- november %>% mutate(kwh_cost=kwh_monthly*Verbrauchspreis_bis1July/10
 november <- november %>% mutate(VAT=0.19*(kwh_cost+Grund_cost+strom_tax)) %>% mutate(total_cost=kwh_cost+Grund_cost+VAT+strom_tax) %>%
   select(Gas_oder_Strom:total_cost)
 
-november <- november %>% mutate(november, dates="01.July.22-14.Dez.22")
+
+### has to be static as well her for now
+november <- november %>% mutate(november, dates="14.Dez-13.Jan")
 
 november<- november[2,]
 november
 
 total_snov_cost <- rbind(before_choye, july, november)
 total_snov_cost
-rm(before_choye, july, november)
+
 
 ##########################################################################################################
 #########################################################################################################
-# for gas until november
+# For Gas until Jan
 
 Only_gas
 
@@ -489,8 +561,16 @@ october<- october[2,]
 october
 
 ###########
-# from ocotber onwards, november so far can later be coded so that it runs automatically
-november <-Only_gas[c(10,13),]
+# now automated
+# With slice tail this runs until the end of data frame slice tail
+
+november1 <- Only_gas %>% slice_tail(n=1)
+november2 <-Only_gas %>% slice(10)
+
+november<-rbind(november2,november1)
+november
+
+##november <-Only_gas[c(10,14),]
 
 november <- november %>% mutate(m3_monthly =Zaehlerstand-lag(Zaehlerstand), 
                               time_diff=Datum-lag(Datum))
@@ -502,7 +582,8 @@ november<- november %>% mutate(kwh=m3_monthly*Brennwert*Zustandszahl) %>%
 november <- november %>% mutate(VAT=0.07*(kwh_cost_co2+Grund_cost+Gas_spe_umlage)) %>% mutate(total_cost=VAT+kwh_cost_co2+Grund_cost+ Gas_spe_umlage)%>%
   select(Gas_oder_Strom:total_cost)
 
-november <- november %>% mutate(november, dates="01.Oct.22-14.Dez.22")
+# now automated
+november <- november %>% mutate(november, dates=end_date_gas)
 
 november<- november[2,]
 november
@@ -520,28 +601,41 @@ rm(before_choye, october, november)
 
 total_gnov_cost
 
-###########
+########### Abschluss Kostenberechnung für die Balance nur über Verbrauch
 ########### Integrating abschläge für strom und gas
 
 total_gnov_cost
 total_snov_cost
 
 #Gas abschlagszahlungen für die  jeweiligen zeiträume
-abschlag_gass <- c(4*125,3*125+2*116,116+116+0.5*116)
-abschlag_gass <- data.frame(abschlag_gass=abschlag_gass)
-abschlag_gass
+# Abschläge werden im Excel ersichtlich, sollten aber eigentlich direkt eingelsen werden
+# der absclag dez wurde vom staat bezahlt, kam also nicht von meinem konto sozusagen, parallel habe wir den abschlag aufs konto eingezahlt
+# also ist er in savings geflossen
 
-total_gnov_cost <- cbind(total_gnov_cost,abschlag_gass)
+# bis 13. jan unterer code, jetzt automated
+#abschlag_gass <- c(4*125,    4*125+116,    116+116+116+0.5*116)
+abschlag_gas
+abschlag_gas <- abschlag_gas %>% select(abschlag_gas)
+abschlag_gas
+
+total_gnov_cost <- cbind(total_gnov_cost,abschlag_gas)
 total_gnov_cost
-total_gnov_cost %>% group_by(dates) %>%summarise(balance=abschlag_gass-total_cost)
-total_gnov_cost %>% group_by(dates) %>%summarise(balance=abschlag_gass-total_cost) %>% summarise(sum_balance=sum(balance))
+total_gnov_cost %>% group_by(dates) %>%summarise(balance=abschlag_gas-total_cost)
+total_gnov_cost %>% group_by(dates) %>%summarise(balance=abschlag_gas-total_cost) %>% summarise(sum_balance=sum(balance))
 
 # Strom
-abschlag_stromm <- c(3*108, 2*108, 2*108+3*143+0.5*143)
-abschlag_stromm <- data.frame(abschlag_stromm=abschlag_stromm)
-total_snov_cost <- cbind(total_snov_cost, abschlag_stromm)
-total_snov_cost %>% group_by(dates) %>% summarise(balance=abschlag_stromm-total_cost)
-total_snov_cost %>% group_by(dates) %>% summarise(balance=abschlag_stromm-total_cost) %>% summarise(sum_balance=sum(balance))+333.26
+# ebenso abschläge sollten direkt eingelsen werden
+
+# before until 13. jan done like this now automated
+#abschlag_stromm <- c(3*108,    2*108,     2*108+4*143+0.5*219)
+#abschlag_stromm <- data.frame(abschlag_stromm=abschlag_stromm)
+
+abschlag_strom
+abschlag_strom <- abschlag_strom %>% select(abschlag_strom)
+
+total_snov_cost <- cbind(total_snov_cost, abschlag_strom)
+total_snov_cost %>% group_by(dates) %>% summarise(balance=abschlag_strom-total_cost)
+total_snov_cost %>% group_by(dates) %>% summarise(balance=abschlag_strom-total_cost) %>% summarise(sum_balance=sum(balance))
 
 
 ## füge billing 2022 august für gas und für strom hinzu
@@ -549,20 +643,24 @@ total_snov_cost %>% group_by(dates) %>% summarise(balance=abschlag_stromm-total_
 total_gnov_cost
 total_snov_cost
 
+
+
+
 # balance until first of mai
 balance_may_gas <-total_gnov_cost[1,]
 balance_may_strom <- total_snov_cost[1,]
 
 
-balance_may_gas<-balance_may_gas %>% select(dates,People_living_flat, Gas_oder_Strom,total_cost, abschlag_gass)
-balance_may_strom <- balance_may_strom %>% select(dates,People_living_flat, Gas_oder_Strom,total_cost, abschlag_stromm)
+balance_may_gas<-balance_may_gas %>% select(dates,People_living_flat, Gas_oder_Strom,total_cost, abschlag_gas)
+balance_may_strom <- balance_may_strom %>% select(dates,People_living_flat, Gas_oder_Strom,total_cost, abschlag_strom)
 
-balance_may_gas <-balance_may_gas %>% mutate(abschlag=abschlag_gass) %>% select(-abschlag_gass)
-balance_may_strom <- balance_may_strom %>% mutate(abschlag=abschlag_stromm) %>% select(-abschlag_stromm)
+balance_may_gas <-balance_may_gas %>% mutate(abschlag=abschlag_gas) %>% select(-abschlag_gas)
+balance_may_strom <- balance_may_strom %>% mutate(abschlag=abschlag_strom) %>% select(-abschlag_strom)
 
 balance_may<-rbind(balance_may_strom, balance_may_gas)
 balance_may
 
+### read in savings from excel file
 savings_2021 <- c(226.06, 0)
 
 balance_may <- cbind(balance_may, savings_2021)
@@ -591,22 +689,28 @@ may_per_person <- may %>% mutate(Jiyoung=per_person, Tristan=per_person, Choye=0
 may_per_person
 
 ########################################################################
-g_nov14<-total_gnov_cost %>% select(dates,People_living_flat, Gas_oder_Strom,total_cost, abschlag_gass)
-s_nov14<-total_snov_cost %>%select(dates, People_living_flat, Gas_oder_Strom,total_cost, abschlag_stromm)
+g_nov14<-total_gnov_cost %>% select(dates,People_living_flat, Gas_oder_Strom,total_cost, abschlag_gas)
+s_nov14<-total_snov_cost %>%select(dates, People_living_flat, Gas_oder_Strom,total_cost, abschlag_strom)
 
 # balance until november, money back from eprimo is added equally to the savings of each person
 g_nov14 <- g_nov14[c(2,3),]
 s_nov14 <- s_nov14[c(2,3),]
 
-g_nov14 <-g_nov14 %>% mutate(abschlag=abschlag_gass) %>% select(-abschlag_gass)
-s_nov14 <- s_nov14 %>% mutate(abschlag=abschlag_stromm) %>% select(-abschlag_stromm)
+g_nov14 <-g_nov14 %>% mutate(abschlag=abschlag_gas) %>% select(-abschlag_gas)
+s_nov14 <- s_nov14 %>% mutate(abschlag=abschlag_strom) %>% select(-abschlag_strom)
 
 gs_nov14<-rbind(g_nov14, s_nov14)
 gs_nov14
 
-savings_Tristan_nov14 <- c(151.3, 0,0,0)
-savings_Choye_no14 <- c(151.3, 0, 0, 0)
-savings_Jiyoung_nov_14 <- c(151.3,0,0,0)
+# read in the savings from account
+# before like this until jan13 now automated and read from Excel
+# savings_Tristan_nov14 <- c(178.467, 0,0,0)
+# savings_Choye_no14 <- c(178.467, 0, 0, 0)
+# savings_Jiyoung_nov_14 <- c(178.467,0,0,0)
+
+savings_Tristan_nov14 <- savings_account %>% select(Tristan)
+savings_Choye_no14 <- savings_account %>% select(Choye)
+savings_Jiyoung_nov_14 <- savings_account %>% select(Jiyoung)
 
 
 gs_nov14 <- cbind(gs_nov14, savings_Tristan_nov14, savings_Choye_no14, savings_Jiyoung_nov_14)
@@ -617,7 +721,10 @@ nov<-gs_nov14 %>% summarise(total_cost=sum(total_cost), abschlag=sum(abschlag), 
                             savings_Tristan_nov14=sum(savings_Tristan_nov14), savings_Choye_no14=sum(savings_Choye_no14), savings_Jiyoung_nov_14=sum(savings_Jiyoung_nov_14))
 
 nov
-nov <- nov %>% mutate(nov, dates="01.May.22-14.Dez.22")
+# Also here date schould be read in from the file
+# now automated
+
+nov <- nov %>% mutate(nov, dates=end_date_strom_gas_balance)
 
 
 nov <- nov %>% mutate(abs_minus_total_cost=abschlag-total_cost)
@@ -644,6 +751,35 @@ gs_nov14
 
 may_per_person
 nov_per_person
+
+
+# plotting the current balance:
+bnov <- nov_per_person %>% select(total_cost, abschlag, savings_Choye_no14,savings_Jiyoung_nov_14,savings_Tristan_nov14)
+bnov <- bnov %>% mutate(total_cost=total_cost, account_savings_tristan=savings_Tristan_nov14, account_savings_JiYoung=savings_Jiyoung_nov_14, 
+                        account_savings_choye=savings_Choye_no14, monthly_payments_to_company=abschlag)      
+bnov <- bnov %>% select(-c(savings_Choye_no14, savings_Tristan_nov14, savings_Jiyoung_nov_14, abschlag))
+
+
+b1<-bnov%>% mutate(total_account_savings=account_savings_tristan+account_savings_JiYoung+account_savings_choye,
+               already_paid_to_companies=monthly_payments_to_company, total_balance=-total_cost+total_account_savings+already_paid_to_companies) %>% 
+            select(- c(account_savings_tristan,account_savings_JiYoung, account_savings_choye,monthly_payments_to_company))
+
+b1 <- gather(b1, key = "name", value = "Euro")
+b1
+
+balance_since_may <- ggplot(b1, aes(name, Euro))+ geom_col()+ labs(title="Balance for the period 01.May 22 to 13.Jan 23")
+balance_since_may
+
+
+################################################################################################################################################
+# writing out the balance graph and the datasets, may_per_person, nov_per_person
+
+write_xlsx(may_per_person, path="C:/Users/User/OneDrive - bwedu/Dokumente/Wohnen/Energy/balance_may_auto.xlsx")
+write_xlsx(nov_per_person, path="C:/Users/User/OneDrive - bwedu/Dokumente/Wohnen/Energy/balance_Jan13_auto.xlsx")
+
+ggsave("balance_since_may.png",plot=balance_since_may, device="png", width=8, height=5.5)
+
+
 
 
 ####
@@ -728,14 +864,21 @@ gs_nov14
 
 
 
-s1<-s1+theme(axis.text.x = element_text(angle = 45, vjust = 0.6, hjust=0.5))+theme(axis.title.x = element_blank())+ ylab("Costs in Eurofor Electricity")
-g1<-g1+theme(axis.text.x = element_text(angle = 45, vjust = 0.6, hjust=0.5))+theme(axis.title.x = element_blank())+ ylab("Costs in Euro for Gas")
-sv<-sv+theme(axis.text.x = element_text(angle = 45, vjust = 0.6, hjust=0.5))+theme(axis.title.x = element_blank())+ ylab("consumption in kwh for Electricity")
-gv<-gv+theme(axis.text.x = element_text(angle = 45, vjust = 0.6, hjust=0.5))+theme(axis.title.x = element_blank())+ ylab("consumption in m3 for Gas")
+s1<-s1+theme(axis.text.x = element_text(size=8,angle = 90, vjust = 0.6, hjust=0.5))+theme(axis.title.x = element_blank())+ ylab("Costs in Euro for Electricity")+
+       theme(legend.key.size = unit(0.5, 'cm'))+ theme(legend.title = element_blank())
+g1<-g1+theme(axis.text.x = element_text(size=8,angle = 90, vjust = 0.6, hjust=0.5))+theme(axis.title.x = element_blank())+ ylab("Costs in Euro for Gas")+
+       theme(legend.text = element_text(size=8))+theme(legend.key.size = unit(0.5, 'cm'))+ theme(legend.title = element_blank())
+
+#+theme(legend.key.size = unit(0.5, 'cm'))
+#g1
+#s1
+
+sv<-sv+theme(axis.text.x = element_text(size=8,angle = 90, vjust = 0.6, hjust=0.5))+theme(axis.title.x = element_blank())+ ylab("consumption in kwh for Electricity")
+gv<-gv+theme(axis.text.x = element_text(size=8,angle = 90, vjust = 0.6, hjust=0.5))+theme(axis.title.x = element_blank())+ ylab("consumption in m3 for Gas")
 
 
 gv_kwh<-ggplot(graph_gV%>%mutate(kwh_monthly=m3_monthly*Brennwert*Zustandszahl)%>%select(dates,kwh_monthly), aes(dates,kwh_monthly))+
-  geom_col()+theme(axis.text.x = element_text(angle = 45, vjust = 0.6, hjust=0.5))+theme(axis.title.x = element_blank())+ylab("consumption in kwh for Gas")
+  geom_col()+theme(axis.text.x = element_text(size=8,angle = 90, vjust = 0.6, hjust=0.5))+theme(axis.title.x = element_blank())+ylab("consumption in kwh for Gas")
 gv_kwh
 
 
@@ -745,12 +888,16 @@ plot2 <- gv_kwh
 plot3<- s1
 plot4 <-g1
 
-plot3<-plot3 + geom_segment(x=8, xend=8, y=108, yend=143)+ theme(legend.title = element_blank())
+plot3<-plot3 + geom_segment(x=8, xend=8, y=108, yend=143)+ theme(legend.title = element_blank()) +geom_segment(x=11.5, xend=11.5, y=143, yend=181)+
+               geom_segment(x=11.5, xend=13.5, y=181, yend=181)
 plot3
 plot4<- plot4+ theme(legend.title=element_blank())
-grid.arrange(plot1, plot2, plot3,plot4, ncol=2)
+all<-grid.arrange(plot1, plot2, plot3,plot4, ncol=2)
+all
 
-(12*50.02+5.86*12000/100)/12000
+##########################################################################################################################################
+# writing out final graph
+ggsave("eneregy_overview.png",plot=all, device="png", width=16, height=11)
 
 # built in themes
 
